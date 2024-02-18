@@ -17,26 +17,28 @@ libcrypto_path = find_library_path('LIBCRYPTO_PATH', default_libcrypto_path)
 APP = ['gui.py']  # Your main script
 DATA_FILES = []  # Include other data files if needed
 OPTIONS = {
-	'argv_emulation': True,
+	'argv_emulation': False,
 	'excludes': ['zmq'],
 	'plist': {
 		'CFBundleName': 'Libby2Readwise',
 		'CFBundleDisplayName': 'Libby2Readwise',
-		'CFBundleIdentifier': 'com.yourdomain.Libby2Readwise',
+		'CFBundleIdentifier': 'com.arshiabehzad.Libby2Readwise',
 		'CFBundleVersion': '1.0',
 		'CFBundleShortVersionString': '1.0',
 		'CFBundleDocumentTypes': [{
-			'CFBundleTypeExtensions': ['json'],
 			'CFBundleTypeName': 'JSON files',
 			'CFBundleTypeRole': 'Viewer',
-			'LSHandlerRank': 'Owner'
+			'LSHandlerRank': 'Owner',
+			'LSItemContentTypes': ['public.json'],  # Add this line
+			'CFBundleTypeExtensions': ['json'],
 		}],
 		# Specify any other plist options you need here
 	},
 	'packages': ['PyQt5', 'pandas', 'requests', 'charset_normalizer', 'pyarrow', 'ssl', 'certifi'],
-	'includes': ['converter','_ssl', 'certifi', 'openssl'],  # Include other Python files or packages if your app depends on them
+	'includes': ['converter', '_ssl', 'certifi', 'openssl'],  # Include other Python files or packages if your app depends on them
 	'frameworks': [libffi_path, libssl_path, libcrypto_path],
-	'iconfile':'Libby2Readwise.icns',
+	'resources': ['info-16.png'],
+	'iconfile': 'Libby2Readwise.icns',
 }
 setup(
 	app=APP,

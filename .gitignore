@@ -158,3 +158,25 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+venv2/.DS_Store
+venv2/bin/activate
+venv2/bin/activate.csh
+venv2/bin/activate.fish
+venv2/bin/Activate.ps1
+venv2/bin/f2py
+venv2/bin/macho_dump
+venv2/bin/macho_find
+venv2/bin/macho_standalone
+venv2/bin/modulegraph
+venv2/bin/normalizer
+venv2/bin/pip
+venv2/bin/pip3
+venv2/bin/pip3.11
+venv2/bin/py2applet
+venv2/bin/pylupdate5
+venv2/bin/pyrcc5
+venv2/bin/python
+venv2/bin/python3
+venv2/bin/python3.11
+venv2/bin/pyuic5
+venv2/pyvenv.cfg

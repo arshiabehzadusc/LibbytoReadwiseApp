@@ -1,15 +1,36 @@
 import sys
 import pandas as pd
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QCheckBox, QPushButton, QHBoxLayout, QSpacerItem, QSizePolicy, QFileDialog, QMessageBox
-from PyQt5.QtCore import Qt
-from converter import make_readwise_format
+from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel, QCheckBox, QPushButton, QHBoxLayout, QSpacerItem, QSizePolicy, QFileDialog, QMessageBox, QToolTip)
+from PyQt5.QtGui import QIcon
+from PyQt5.QtCore import Qt, QPoint, QSize, QTimer, QEvent
+from Cocoa import NSApplication, NSObject, NSApp
+from PyObjCTools import AppHelper
+import objc
 import os
 import platform
+from converter import make_readwise_format
 
+class AppDelegate(NSObject):
+    def applicationDidFinishLaunching_(self, notification):
+            print("Application did finish launching")
+            NSApp.activateIgnoringOtherApps_(True)
+        
+    def application_openFiles_(self, app, filenames):
+        print("Opening files from Finder:", filenames)
+        global window
+        if window:
+            for filename in filenames:
+                # Ignore .py files or specifically gui.py to prevent processing during development
+                if not filename.endswith('.py'):
+                    window.processFilePath(filename)
+        
 class CSVConverterApp(QWidget):
     def __init__(self, filePath=None):
         super().__init__()
         self.filePath = filePath
+        self.currentTooltip = None
+        self.infoButtons = []
+        self.setFocusPolicy(Qt.StrongFocus)
         self.initUI()
     
     def initUI(self):
@@ -45,30 +66,111 @@ class CSVConverterApp(QWidget):
         self.mainLayout.addLayout(self.fileSelectionLayout)
     
         # Add some space
-        self.mainLayout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+        #self.mainLayout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
         
         # Checkboxes for options
-        self.checkbox1 = QCheckBox('Split quotes to "Highlights" column and non quotes to "Notes" column')
-        self.mainLayout.addWidget(self.checkbox1)
-        
-        self.checkbox2 = QCheckBox('Estimate page number from percent of audiobook (Rough Estimate)')
-        self.mainLayout.addWidget(self.checkbox2)
-        
-        self.checkbox3 = QCheckBox('Add "N:" as a prefix for any highlight that is not a direct quote')
-        self.mainLayout.addWidget(self.checkbox3)
-        
+        # Checkboxes with info buttons
+        self.splitQuotesCheckbox = self.addCheckboxWithInfo("Split quotes to \"Highlights\" column and non quotes to \"Notes\" column", 'Quotes are indicated by anytime your libby bookmark has anything between quotation marks \nAnything that is not is moved to the Notes section', self.mainLayout)
+        self.estimatePageNumberCheckbox = self.addCheckboxWithInfo("Estimate page number from percent of audiobook (Rough Estimate)", "Estimates the page number based on the percentage of the audiobook the \nbookmark was marked at and the total page count of the book. \nRequires internet connection to connect to Google Books API to find page count", self.mainLayout)
+        self.notePrefixCheckbox = self.addCheckboxWithInfo("Add \"N:\" as a prefix for any highlight that is not a direct quote", 'Prefixes non-quote highlights with "N:" to differentiate them. \nex. "N: Romeo really does care about Juliet it seems"', self.mainLayout)        
         # Convert button
         self.convertButton = QPushButton('Convert')
         self.convertButton.clicked.connect(self.processFile)
         self.mainLayout.addWidget(self.convertButton)
         
-        self.setFixedSize(self.sizeHint())
+        #self.setFixedSize(self.sizeHint())
         
+        if self.infoButtons:  # Check if there are any info buttons
+            self.infoButtons[0].setFocus()  # Set focus to the first info button
         # Enable drag and drop
+        
         self.setAcceptDrops(True)
         
         self.setLayout(self.mainLayout)
+        
+        self.adjustSize()
+        self.setMinimumSize(self.width(), self.height())
+        
+    def activateApplication(self):
+        NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
+        
+    def showEvent(self, event):
+        # Ensure that the window has the initial focus when shown
+        super().showEvent(event)
+        self.activateApplication()
+        
+    def addCheckboxWithInfo(self, label, tooltipText, layout):
+        checkboxLayout = QHBoxLayout()
+        checkbox = QCheckBox(label)
+        checkboxLayout.addWidget(checkbox)
     
+        infoButton = QPushButton()
+        infoButton.setFocusPolicy(Qt.StrongFocus)
+        infoButton.setIcon(QIcon('info-16.png'))  # Ensure the icon path is correct
+        infoButton.setIconSize(QSize(12, 12))
+        infoButton.setFixedSize(16, 16)
+        infoButton.setStyleSheet("QPushButton {border: none; background-color: transparent;}")
+    
+        # Associate tooltip text with the button using properties
+        infoButton.setProperty("tooltipText", tooltipText)
+    
+        # Connect the custom event handlers
+        infoButton.installEventFilter(self)
+    
+        checkboxLayout.addWidget(infoButton)
+        layout.addLayout(checkboxLayout)
+        if self.infoButtons:  # Check if there are any info buttons
+            self.infoButtons[0].setFocus()
+        return checkbox
+    
+    def processFilePath(self, filePath):
+        if os.path.isfile(filePath) and filePath.lower().endswith('.json'):
+            self.filePath = filePath
+            self.showSelectedFile()  # Update the UI to reflect the selected file
+        else:
+            QMessageBox.critical(self, "Invalid File", "Please select a valid JSON file.")
+                
+    def eventFilter(self, obj, event):
+        if isinstance(obj, QPushButton) and obj.property("tooltipText"):
+            if event.type() == QEvent.Enter:
+                self.infoButtonEnter(obj)
+                return True
+            elif event.type() == QEvent.Leave:
+                self.infoButtonLeave(obj)
+                return True
+        return super().eventFilter(obj, event)
+    
+    def infoButtonEnter(self, button):
+        tooltipText = button.property("tooltipText")
+        if tooltipText:
+            self.showTooltip(button, tooltipText)
+            
+    def infoButtonLeave(self, button):
+        self.hideTooltip()
+        
+    def showTooltip(self, parent, text):
+        if self.currentTooltip:
+            self.currentTooltip.close()
+        self.currentTooltip = QLabel(text, self, Qt.ToolTip | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.currentTooltip.setStyleSheet("""
+            QLabel {
+                color: #000000;
+                background-color: #f0f0f0;
+                padding: 4px;
+                border-radius: 5px;
+                font: 12px;
+            }
+        """)
+        self.currentTooltip.adjustSize()
+        self.currentTooltip.move(parent.mapToGlobal(QPoint(20, -self.currentTooltip.height() - 10)))
+        self.currentTooltip.show()
+        
+    def hideTooltip(self):
+        if self.currentTooltip:
+            self.currentTooltip.close()
+            self.currentTooltip = None
+
+            
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
             event.accept()
@@ -93,7 +195,7 @@ class CSVConverterApp(QWidget):
         if self.filePath:
             filename = os.path.basename(self.filePath)
             self.label.setText(f'File selected: {filename}')
-    
+        
     def processFile(self):
         if not self.filePath:
             self.label.setText('Please drag and drop a JSON file first.')
@@ -101,9 +203,9 @@ class CSVConverterApp(QWidget):
         # Assuming the file is a JSON that can be directly converted to a DataFrame
         
         
-        splitQuotes = self.checkbox1.isChecked()
-        estimatePageNumber = self.checkbox2.isChecked()
-        notePrefix = self.checkbox3.isChecked()
+        splitQuotes = self.splitQuotesCheckbox.isChecked()
+        estimatePageNumber = self.estimatePageNumberCheckbox.isChecked()
+        notePrefix = self.notePrefixCheckbox.isChecked()
         try:
             df= make_readwise_format(self.filePath, splitQuotes, estimatePageNumber, notePrefix)
             # Process DataFrame as per your requirements
@@ -116,14 +218,12 @@ class CSVConverterApp(QWidget):
             self.label.setText(f'Success! Saved to: {savePath}')
         except Exception as e:  # Catch any exception during processing or saving
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
-
+    
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    # Check if a file path is passed as an argument
-    filePath = sys.argv[1] if len(sys.argv) > 1 else None
-
-    window = CSVConverterApp(filePath=filePath)
-    window.showSelectedFile()  # Show selected file on startup if launched with a file argument
+    delegate = AppDelegate.alloc().init()
+    NSApplication.sharedApplication().setDelegate_(delegate)
+    window = CSVConverterApp()
     window.show()
     sys.exit(app.exec_())
     
