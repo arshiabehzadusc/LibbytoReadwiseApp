@@ -35,11 +35,12 @@ Set the following environment variables according to your library paths:
 export LIBFFI_PATH=/path/to/libffi.8.dylib
 export LIBSSL_PATH=/path/to/libssl.dylib
 export LIBCRYPTO_PATH=/path/to/libcrypto.dylib
+````
 
 ## Build Application
 
 Now you can build the application using py2app:
 ```bash
 python builder.py py2app
-
+````
 Build should be under `dist` directory
