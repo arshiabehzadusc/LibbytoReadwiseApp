@@ -51,8 +51,11 @@ class CSVConverterApp(QWidget):
         self.checkbox1 = QCheckBox('Split quotes to "Highlights" column and non quotes to "Notes" column')
         self.mainLayout.addWidget(self.checkbox1)
         
-        self.checkbox2 = QCheckBox('Add percent as "Location" for quote. (ie 95% is stored as 95)')
+        self.checkbox2 = QCheckBox('Estimate page number from percent of audiobook (Rough Estimate)')
         self.mainLayout.addWidget(self.checkbox2)
+        
+        self.checkbox3 = QCheckBox('Add "N:" as a prefix for any highlight that is not a direct quote')
+        self.mainLayout.addWidget(self.checkbox3)
         
         # Convert button
         self.convertButton = QPushButton('Convert')
@@ -99,9 +102,10 @@ class CSVConverterApp(QWidget):
         
         
         splitQuotes = self.checkbox1.isChecked()
-        percentLocations = self.checkbox2.isChecked()
+        estimatePageNumber = self.checkbox2.isChecked()
+        notePrefix = self.checkbox3.isChecked()
         try:
-            df = make_readwise_format(self.filePath, splitQuotes, percentLocations)
+            df= make_readwise_format(self.filePath, splitQuotes, estimatePageNumber, notePrefix)
             # Process DataFrame as per your requirements
             # For example: Convert 'percent' to 'Location', adjust percentages, etc.
             # This step depends on the specifics of your JSON structure and processing needs

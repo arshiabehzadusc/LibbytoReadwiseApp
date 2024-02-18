@@ -3,6 +3,8 @@ import pandas as pd
 import json
 import platform
 import os
+import requests
+import certifi
 
 def extract_and_update(row):
 	highlight_text = row['Highlight']
@@ -20,19 +22,49 @@ def extract_and_update(row):
 	# If there are no quotes, the original Highlight text remains, and Notes stay empty
 	return row
 
-def get_path(filename):
-	name = os.path.splitext(filename)[0]
-	ext = os.path.splitext(filename)[1]
-	
-#	if platform.system() == "Darwin":
-	from AppKit import NSBundle
-	file = NSBundle.mainBundle().pathForResource_ofType_(name, ext)
-	return file #or os.path.realpath(filename)
-#	else:
-#		return os.path.realpath(filename)
-	
-def make_readwise_format(filePath, splitQuotes, percentLocations):
-	#filePath = get_path(filePath)
+def add_note_prefix(row):
+	highlight_text = row['Highlight']
+	if '"' not in highlight_text and  '“' not in highlight_text:
+		row["Highlight"] = f"N: {highlight_text}"
+	return row
+
+def get_page_number_from_google_books(title, author, api_key):
+	base_url = "https://www.googleapis.com/books/v1/volumes"
+	# Include the author in the search query
+	params = {"q": f"{title}+inauthor:{author}", "key": api_key}
+	response = requests.get(base_url, params=params, verify=certifi.where())
+	data = response.json()
+	if response.status_code != 200:
+		# Handle non-OK responses
+		if "error" in data:
+			raise Exception(f"{data['error']['message']} Try again without estimating page number")
+		else:
+			raise Exception("An unknown error occurred while fetching page data. Try again without estimating page number")
+	page_count = None
+	if data["totalItems"] > 0:
+		book_data = data["items"][0]
+		if title not in book_data["volumeInfo"]["title"] or author not in book_data['volumeInfo']['authors']:
+			raise Exception("Book could not be found. Try again without page estimating page number")
+		if "pageCount" in book_data["volumeInfo"]:
+			page_count = book_data['volumeInfo']['pageCount']
+		else:
+			raise Exception(" Try again without page estimate") 
+	else:
+		raise Exception("Book could not be found. Try again without page estimating page number")
+		
+	if not page_count:
+		raise Exception("Page count not available for estimate. Try again without estimating page number")
+
+	return page_count
+
+def estimate_page_number(row, page_count):
+	percent = row['percent']
+	estimate = int(round(percent * page_count))
+	row['percent'] = estimate
+	return row
+
+		
+def make_readwise_format(filePath, splitQuotes, estimatePageNumber, notePrefix):
 	with open(filePath, 'r', encoding='utf-8') as file:
 		data = json.load(file)
 		
@@ -54,17 +86,18 @@ def make_readwise_format(filePath, splitQuotes, percentLocations):
 	df['Author'] = author
 	
 	# Apply the function across the DataFrame rows
+	if notePrefix:
+		df = df.apply(add_note_prefix, axis=1)
 	if splitQuotes:
 		df['Notes'] = ''
 		df = df.apply(extract_and_update, axis=1)
-	
-	if percentLocations:
-		df['percent'] = (df['percent'] * 100).round(0).astype(int)
-		# Rename the 'percent' column to 'Location'
+	if estimatePageNumber:
+		api_key = "AIzaSyCFIrcPgzZfwoZw4zhM_iKH1yNZy7dmnmw"
+		page_count = get_page_number_from_google_books(title,author,api_key)
+		df = df.apply(estimate_page_number, axis=1, page_count=page_count)
 		df.rename(columns={'percent': 'Location'}, inplace=True)
 	else:
 		df.drop('percent', axis=1, inplace=True)
-	
 	return df
 	
 	
